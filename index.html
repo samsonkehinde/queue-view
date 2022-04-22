@@ -1,4 +1,3 @@
-
 <!--/*
 *Copyright 2015 Kyle Haefner
 *
@@ -20,533 +19,540 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 <!DOCTYPE html>
 <html>
+
 <head>
-<title>Queue View</title>
-<!--<script src="http://code.jquery.com/jquery-1.11.1.min.js"></script>-->
-<script src="/jquery/jquery-1.11.1.min.js"></script>
-<script src="/jquery/jquery-ui.min.js"></script>
-<script src="/jquery/jquery.layout-latest.js"></script>
-<script src="/socket.io/socket.io.js"></script>
-<link rel="stylesheet" href="/jquery/jquery-ui.css">
-<link rel="stylesheet" href="/css/queue-view.css">
-<link rel="icon" href="/images/queue-view-favicon.png">
-<script type="text/javascript">
-//Globals
-var Agents = new Array();
-var Members = new Array();
-var Queues = new Array();
-function removeAgentString(name){
-	return name.replace("agent-",""); 
-};
-function pad(n, width, z) {
-  z = z || '0';
-  n = n + '';
-  return n.length >= width ? n : new Array(width - n.length + 1).join(z) + n;
-}
+	<title>Queue View</title>
+	<!--<script src="http://code.jquery.com/jquery-1.11.1.min.js"></script>-->
+	<script src="/jquery/jquery-1.11.1.min.js"></script>
+	<script src="/jquery/jquery-ui.min.js"></script>
+	<script src="/jquery/jquery.layout-latest.js"></script>
+	<script src="/socket.io/socket.io.js"></script>
+	<link rel="stylesheet" href="/jquery/jquery-ui.css">
+	<link rel="stylesheet" href="/css/queue-view.css">
+	<link rel="icon" href="/images/queue-view-favicon.png">
+	<script type="text/javascript">
+		//Globals
+		var Agents = new Array();
+		var Members = new Array();
+		var Queues = new Array();
 
-function diffArray(a, b) {
-  var seen = [], diff = [];
-  for ( var i = 0; i < b.length; i++)
-      seen[b[i]] = true;
-  for ( var i = 0; i < a.length; i++)
-      if (!seen[a[i]])
-          diff.push(a[i]);
-  return diff;
-}
+		function removeAgentString(name) {
+			return name.replace("agent-", "");
+		};
 
-$(document).ready(function () {
-		$('body').layout({ 
-			applyDemoStyles: true,
-			north__size:.1,
-			east__size:.4,
-			west__size:.1,
-			west__minSize:.15,
-			west__maxSize:.25,
-			east__minSize:.3,
-			east__maxSize:.4,
-			center__size:.5,
-		});
-	$( "#queueSelect" ).selectmenu({
-		change: function( event, ui ) {
-			$("#agentContainer").html("");
-			agentUpdate();
-			handleMemberUpdate();
-			queueStatsUpdate();
+		function pad(n, width, z) {
+			z = z || '0';
+			n = n + '';
+			return n.length >= width ? n : new Array(width - n.length + 1).join(z) + n;
 		}
-	});
-setInterval(function() {
-	$(function(){
-	 $(".callBox").each(function(){
-		for(var m=0;m<Members.length;m++){
-			if(Members[m].uuid == $(this).attr('id').replace("callBox_","")){
-				var uuid= Members[m].uuid;
-				var seconds;
-				var minutes;
-				var hours;
-				var startDate = new Date(parseInt(Members[m].call_start));
-				var rightNow = new Date();
-				seconds=pad(Math.ceil((rightNow-startDate/1000)/1000)%60,2);
-				minutes=pad(Math.floor(((rightNow-startDate/1000)/1000)/60),2);
-				hours=pad(Math.floor(((rightNow-startDate/1000)/1000)/360),2);
-				var timeContainer=$("#callTimer_"+uuid);
-				timeContainer.html(hours+":"+minutes+":"+seconds);
-			}
+
+		function diffArray(a, b) {
+			var seen = [], diff = [];
+			for (var i = 0; i < b.length; i++)
+				seen[b[i]] = true;
+			for (var i = 0; i < a.length; i++)
+				if (!seen[a[i]])
+					diff.push(a[i]);
+			return diff;
 		}
-	    });
-         $(".bridgedTimer").each(function(){
-                for(var m=0;m<Members.length;m++){
-                        if(Members[m].uuid == $(this).attr('id').replace("bridgedTimer_","")){
-                                var uuid= Members[m].uuid;
-                                var seconds;
-                                var minutes;
-                                var hours;
-                                var startDate = new Date(parseInt(Members[m].call_join)*1000);
-                                var rightNow = new Date();
-                                seconds=pad(Math.ceil((rightNow-startDate)/1000)%60,2);
-                                minutes=pad(Math.floor(((rightNow-startDate)/1000)/60),2);
-                                hours=pad(Math.floor(((rightNow-startDate)/1000)/360),2);
-                                var timeContainer=$("#bridgedTimer_"+uuid);
-                                timeContainer.html(hours+":"+minutes+":"+seconds);
-		
-                        }
-                }
-            });
-	});
-}, 1000);
-});
 
-function handleMemberUpdate(){
-	var displayedArray = [];
-	var pushedArray = [];
-	var diff = [];
-
-	 $("#callContainer").children().each(function(){
-		displayedArray.push($(this).attr('id').replace("callBox_",""));
-	 });
-
-	for(var m=0;m<Members.length;m++){
-		pushedArray.push(Members[m].uuid);	
-	}
-
-	diff = diffArray(displayedArray,pushedArray);
-	for(var d=0;d<diff.length;d++){
-		var callBox = $("#callBox_"+diff[d]);
-		callBox.hide( "drop", { direction: "right" }, "slow" ,
-			function () {callBox.remove()}
-		);
-	}	
-	
-	//Member Join/eave Update	
-	for(var m=0;m<Members.length;m++){
-		if(Members[m].state == "Bridged"){
-			var callBox=$("#callBox_"+Members[m].uuid);
-			var agentState=$("#agentState_"+Members[m].agent);
-			callBox.hide("drop", { direction: "left" }, "slow");
-			var htmlOut="";
-			htmlOut+="<div class='bridgedStatus' id='bridgedStatus_"+Members[m].uuid+"'>";
-			htmlOut+="<div class='bridgedID'><div class='bridgedName'>"+Members[m].name+"</div><div class='bridgedNumber'>"+Members[m].number+"</div></div>";
-			htmlOut+="<div class='bridgedTimer' id='bridgedTimer_"+Members[m].uuid+"'>00:00:00</div>";
-			htmlOut+="</div>";
-			agentState.html(htmlOut);
-		}
-		if(Members[m].state == "Inactive"){
-			var callBox=$("#callBox_"+Members[m].uuid);
-			var agentState=$("#agentState_"+Members[m].agent);
-			callBox.remove();
-		}
-		if(Members[m].state == "Active"){
-			if(!$("#callBox_"+Members[m].uuid).length){//only add new calls
-				var htmlOut="";
-				var selectedQueue = $( "#queueSelect option:selected" ).text();
-					if(Members[m].queue == selectedQueue){ //will need something about joined here
-						htmlOut+="<div class='callBox' style='display:none' id='callBox_"+Members[m].uuid+"'>";
-							htmlOut+="<div class='callIcon'></div>";
-							htmlOut+="<div class='callInfo' id='callerID_"+Members[m].uuid+"'><div class='callInfoHeader'>Caller</div>";
-							htmlOut+="<div class='callerName'>"+Members[m].name+"</div><div class='callerNumber'>"+Members[m].number+"</div></div>";
-							htmlOut+="<div class='callStatus' ><div class='callInfoHeader'>Time In Queue</div><div class='callTimer' id='callTimer_"+Members[m].uuid+"'>00:00:00</div></div>";
-						htmlOut+="</div>";
-					}
-				$("#callContainer").append(htmlOut);
-				var callBox=$("#callBox_"+Members[m].uuid);
-				callBox.show( "drop", { direction: "up" }, "slow" );
-			}
-		}
-	}
-
-}
-
-function flash(element){
-	//old_background= element.css("background-color");
-	element.css('backgroundColor','hsl(0,100%,50%');
-
-	var d = 100;
-	for(var i=50; i<=100; i=i+0.1){
-	    d  += 10;
-	    (function(ii,dd){
-		setTimeout(function(){
-		    element.css('backgroundColor','hsl(0,100%,'+ii+'%)'); 
-		}, dd);    
-	    })(i,d);
-	}
-	//element.css("background-color",old_background);
-
-}
-
-
-
-function queueStatsUpdate(){
-	
-	//alert(JSON.stringify(Queues));
-	var queue = Queues;
-	var totalAgents=0;
-	var loggedInAgents=0;
-	var availableAgents=0;
-	var onBreakAgents=0;
-	var onCallAgents=0;
-	var totalCalls=0;
-	var activeCalls=0;
-	var answeredCalls=0;
-	var abandonedCalls=0;
-	var abandonedTime=0;
-	var abandonedTimeSeconds=0;
-	var longestWait=0;
-	for(var q=0;q<queue.length;q++){
-		totalAgents = queue[q].totalAgents;
-		loggedInAgents = queue[q].loggedInAgents;
-		availableAgents = queue[q].availableAgents;
-		onBreakAgents = queue[q].onBreakAgents;
-		onCallAgents = queue[q].agentsInCall;
-		totalCalls = queue[q].totalCalls;
-		activeCalls= queue[q].activeCalls;
-		answeredCalls= queue[q].answeredCalls;
-		abandonedCalls=queue[q].abandonedCalls;
-		abandonedTime=queue[q].abandonedTime;
-		abandonedTimeSeconds = pad(abandonedTime % 60,2);
-		abandonedTimeMinutes = pad(Math.floor(abandonedTime / 60),2);
-		abandonedTimeHours = pad(Math.floor(abandonedTime / 3600),2);
-		longestWait=queue[q].longestWait;
-		longestWaitSeconds=pad(longestWait % 60,2);
-		longestWaitMinutes=pad(Math.floor(longestWait / 60),2);
-		longestWaitHours=pad(Math.floor(longestWait / 3600),2);
-		selectedQueue = $( "#queueSelect option:selected" ).text();
-			if(queue[q].name == selectedQueue){ //will need something about joined here
-				$("#agentsTotal").html(totalAgents);
-				$("#agentsLoggedIn").html(loggedInAgents);
-				$("#agentsAvailable").html(availableAgents);
-				$("#agentsOnBreak").html(onBreakAgents);
-				$("#agentsInCall").html(onCallAgents);
-				//flash($("#callsTotal"));
-				$("#callsTotal").html(totalCalls);
-				$("#callsConnected").html(activeCalls);
-				$("#callsAnswered").html(answeredCalls);
-				$("#callsAbandonded").html(abandonedCalls);
-				$("#callsWait").html(longestWaitHours+":"+longestWaitMinutes+":"+longestWaitSeconds);
-				$("#abandonTime").html(abandonedTimeHours+":"+abandonedTimeMinutes+":"+abandonedTimeSeconds);
-			}
-	}
-}
-
-
-function handleAgentState(){
-	var agents=Agents;
-	var agentsLoggedInCount=0;
-	var selectedQueue = $( "#queueSelect option:selected" ).text();
-	for(var a=0;a<agents.length;a++){
-		var state = agents[a].state+"";
-		var status=agents[a].status+"";
-		var agentStateID = $("#agentState_"+agents[a].name);
-		var agentStatusID = $("#agentStatus_"+agents[a].name);
-		if(status =="Available"){
-			agentsLoggedInCount++;
-			if(state == "In a queue call"){
-			}
-			if(state == "Waiting"){
-				agentStateID.html(state);
-			}
-			if(state == "Receiving"){
-				agentStateID.html(state);
-			}
-		}else if(status =="On Break"){
-				agentStateID.html("---");
-		}
-	}
-	$("#agentsLoggedIn").html(agentsLoggedInCount);
-}
-
-function handleAgentStatus(){
-	var agents=Agents;
-	for(var a=0;a<agents.length;a++){
-		var status=agents[a].status+"";
-		var agentStatusID = $("#agentStatus_"+agents[a].name);
-		var agentBoxID = $("#agentBox_"+agents[a].name);
-		if(status == "On Break"){
-			if(agentBoxID.is(":hidden")){
-				agentBoxID.show( "drop", { direction: "left" }, "slow" );
-			}
-			agentStatusID.css("background-color", "orange");
-			//agentStatusID.effect( "highlight", {color:"#669966"}, 1000 );
-		}
-		if(status == "Available"){
-			if(agentBoxID.is(":hidden")){
-				agentBoxID.show( "drop", { direction: "left" }, "slow" );
-			}
-			agentStatusID.css("background-color", "green");
-			//agentStatusID.effect( "highlight", {color:"#669966"}, 1000 );
-		}
-		if(status == "Logged Out"){
-			agentBoxID.hide( "drop", { direction: "right" }, "slow" );
-		}
-	}
-
-}
-
-
-function displayMembers(){
-	$("#callContainer").html("");
-	var members=Members;
-	var htmlOut="";
-	var selectedQueue = $( "#queueSelect option:selected" ).text();
-	for (var m=0;m<members.length;m++){
-		if(members[m].queue == selectedQueue){ //will need something about joined here
-			htmlOut+="<div class='callBox' id='callBox_"+members[m].uuid+"'>";
-				htmlOut+="<div class='callIcon'></div>";
-				htmlOut+="<div class='callInfo' id='callerID_"+members[m].uuid+"'><div class='callInfoHeader'>Caller</div>";
-				htmlOut+="<div class='callerName'>"+members[m].name+"</div><div class='callerNumber'>"+members[m].number+"</div></div>";
-				htmlOut+="<div class='callStatus' ><div class='callInfoHeader'>Time In Queue</div><div class='callTimer' id='callTimer_"+members[m].uuid+"'>00:00:00</div></div>";
-			htmlOut+="</div>";
-		}
-	}
-	$("#callContainer").append(htmlOut);
-}
-
-
-
-function agentUpdate(){
-	var htmlOut="";
-	var selectedQueue = $( "#queueSelect option:selected" ).text();
-	for(var a=0;a<Agents.length;a++){
-		if(Agents[a].queue == selectedQueue){
-				if(!$("#agentBox_"+Agents[a].name).length){
-					htmlOut+= "<div class='agentBox' id='agentBox_"+Agents[a].name+"'>";
-						htmlOut+= "<div class='agentAvatar'>"
-						+"<div class='agentStatus' id='agentStatus_"+Agents[a].name+"'></div><div class='agentInfoHeader'>"+removeAgentString(Agents[a].name)+"</div></div>"
-						+"<div class='agentInfo'><div class='agentInfoHeader'>Calls</div>"+Agents[a].calls_answered+"</div>"
-						+"<div class='agentInfo'><div class='agentInfoHeader'>Missed</div>"+Agents[a].no_answer_count+"</div>"
-						+"<div class='agentInfo'><div class='agentInfoHeader'>CPT</div>"+Agents[a].talk_time+"</div>";
-						htmlOut+="<div class='agentStatusInfo'>"
-							+"<div class='agentInfoHeader'>Call State</div>"
-							+"<div id='agentState_"+Agents[a].name+"'>"+Agents[a].state+"</div></div>";
-					htmlOut+= "</div>";
+		$(document).ready(function () {
+			$('body').layout({
+				applyDemoStyles: true,
+				north__size: .1,
+				east__size: .4,
+				west__size: .1,
+				west__minSize: .15,
+				west__maxSize: .25,
+				east__minSize: .3,
+				east__maxSize: .4,
+				center__size: .5,
+			});
+			$("#queueSelect").selectmenu({
+				change: function (event, ui) {
+					$("#agentContainer").html("");
+					agentUpdate();
+					handleMemberUpdate();
+					queueStatsUpdate();
 				}
-		}
-	}
-	$("#agentContainer").append(htmlOut);
-	for(var a=0;a<Agents.length;a++){
-		var status=Agents[a].status+"";
-		var agentStatusID = $("#agentStatus_"+Agents[a].name);
-		var agentBoxID = $("#agentBox_"+Agents[a].name);
-		if(status == "On Break"){
-			if(agentBoxID.is(":hidden")){
-				agentBoxID.show( "drop", { direction: "left" }, "slow" );
-			}
-			agentStatusID.css("background-color", "orange");
-			//agentStatusID.effect( "highlight", {color:"#669966"}, 1000 );
-		}
-		if(status == "Available"){
-			if(agentBoxID.is(":hidden")){
-				agentBoxID.show( "drop", { direction: "left" }, "slow" );
-			}
-			agentStatusID.css("background-color", "green");
-			//agentStatusID.effect( "highlight", {color:"#669966"}, 1000 );
-		}
-		if(status == "Logged Out"){
-			agentBoxID.hide( "drop", { direction: "right" }, "slow" );
-		}
-		var state = Agents[a].state+"";
-		var status=Agents[a].status+"";
-		var agentStateID = $("#agentState_"+Agents[a].name);
-		var agentStatusID = $("#agentStatus_"+Agents[a].name);
-		if(status =="Available"){
-			if(state == "In a queue call"){
-				agentStatusID.css("background-color", "red");
-			}
-			if(state == "Waiting"){
-				agentStateID.html(state);
-				agentStatusID.css("background-color", "green");
-			}
-			if(state == "Receiving"){
-				agentStateID.html(state);
-				agentStatusID.css("background-color", "yellow");
-			}
-		}else if(status =="On Break"){
-				agentStateID.html("---");
-		}
-	}
-};
-  </script>
-	</head>
-	<body>
-	<div class="ui-layout-center"><div class='columnHeader'>Agents</div>
-				<div id="agentContainer"></div>
-				</div>
-				<div class="ui-layout-north" id="top">
-					    <select name="queueSelect" id="queueSelect">
-						<option>Select A Queue</option>
-					    </select>
-					<div id='logo'>
-						Queue View
-					</div>
-				</div>
-				<div class="ui-layout-south">South</div>
-				<div class="ui-layout-east">
-					<div class='columnHeader'>
-						Calls
-					</div>
-					<div id="callContainer"></div>
-					</div>
-				</div>
-				<div class="ui-layout-west">
-					<div class='columnHeader'>
-						Queue Stats
-					</div>
-					<div id="statsContainer" class="statsContainer"></div>
-						<div class='statsBox'>
-							<div class='statsHeader'>
-								Agents
-							</div>
-							<div class='statsInfo'>
-								<div class='statsSubHeader'>
-									Total
-								</div>
-								<div id='agentsTotal' class='statsData'>
-									--	
-								</div>
-							</div>
-							<div class='statsInfo'>
-								<div class='statsSubHeader'>
-									Logged in
-								</div>
-								<div id='agentsLoggedIn' class='statsData'>
-									--	
-								</div>
-							</div>
-							<div class='statsInfo'>
-								<div class='statsSubHeader'>
-									Available
-								</div>
-								<div id='agentsAvailable' class='statsData'>
-									--	
-								</div>
-							</div>
-							<div class='statsInfo'>
-								<div class='statsSubHeader'>
-									In Call
-								</div>
-								<div id='agentsInCall' class='statsData'>
-									--	
-								</div>
-							</div>
-							<div class='statsInfo'>
-								<div class='statsSubHeader'>
-									On Break
-								</div>
-								<div id='agentsOnBreak' class='statsData'>
-									--	
-								</div>
-							</div>
-						</div>
-						<div class='statsBox'>
-							<div class='statsHeader'>
-								Queue
-							</div>
-							<div class='statsInfo'>
-								<div class='statsSubHeader'>
-									Total Calls
-								</div>
-								<div id='callsTotal' class='statsData'>
-									--	
-								</div>
-							</div>
-							<div class='statsInfo'>
-								<div class='statsSubHeader'>
-									Calls Connected
-								</div>
-								<div id='callsConnected' class='statsData'>
-									--	
-								</div>
-							</div>
-							<div class='statsInfo'>
-								<div class='statsSubHeader'>
-									Answered Calls
-								</div>
-								<div id='callsAnswered' class='statsData'>
-									--	
-								</div>
-							</div>
-							<div class='statsInfo'>
-								<div class='statsSubHeader'>
-									Calls Abandonded
-								</div>
-								<div id='callsAbandonded' class='statsData'>
-									--	
-								</div>
-							</div>
-							<div class='statsInfo'>
-								<div class='statsSubHeader'>
-									Longest Wait	
-								</div>
-								<div id='callsWait' class='statsData'>
-									--	
-								</div>
-							</div>
-							<div class='statsInfo'>
-								<div class='statsSubHeader'>
-									Abandon Time
-								</div>
-								<div id='abandonTime' class='statsData'>
-									--	
-								</div>
-							</div>
-						</div>
-				</div>
-				</body>
-<script>
-  var socket = io();
- socket.on('queueFill',function(qf){
-	for(var q=0;q<qf.length;q++){
-		$("#queueSelect").append("<option>"+qf[q].name+"</option>");
-	}
-});
- socket.on('agentFill',function(af){
-	Agents=af;
-	agentUpdate();
-});
- socket.on('agentStatusUpdate',function(asu){
-	Agents=asu;
-	agentUpdate();
-	//handleAgentState();
-});
- socket.on('agentStateUpdate',function(asu){
-	Agents=asu;
-	agentUpdate();
-	//$("#statsContainer").html(JSON.stringify(asu));
-});
- socket.on('agentOffering',function(ao){
-	Agents=ao;
-	//$("#statsContainer").html(JSON.stringify(ao));
-});
- socket.on('memberStart',function(mu){
-	Members=mu;
-	handleMemberUpdate();
-});
- socket.on('queueStats',function(qu){
-	Queues=qu;
-	queueStatsUpdate();
-});
- socket.on('memberUpdate',function(mu,callback){
-	Members=mu;
-	handleMemberUpdate();
-});
-</script>
-</html>
+			});
+			
+			setInterval(function () {
+				$(function () {
+					$(".callBox").each(function () {
+						for (var m = 0; m < Members.length; m++) {
+							if (Members[m].uuid == $(this).attr('id').replace("callBox_", "")) {
+								var uuid = Members[m].uuid;
+								var seconds;
+								var minutes;
+								var hours;
+								var startDate = new Date(parseInt(Members[m].call_start));
+								var rightNow = new Date();
+								seconds = pad(Math.ceil((rightNow - startDate / 1000) / 1000) % 60, 2);
+								minutes = pad(Math.floor(((rightNow - startDate / 1000) / 1000) / 60), 2);
+								hours = pad(Math.floor(((rightNow - startDate / 1000) / 1000) / 360), 2);
+								var timeContainer = $("#callTimer_" + uuid);
+								timeContainer.html(hours + ":" + minutes + ":" + seconds);
+							}
+						}
+					});
+					$(".bridgedTimer").each(function () {
+						for (var m = 0; m < Members.length; m++) {
+							if (Members[m].uuid == $(this).attr('id').replace("bridgedTimer_", "")) {
+								var uuid = Members[m].uuid;
+								var seconds;
+								var minutes;
+								var hours;
+								var startDate = new Date(parseInt(Members[m].call_join) * 1000);
+								var rightNow = new Date();
+								seconds = pad(Math.ceil((rightNow - startDate) / 1000) % 60, 2);
+								minutes = pad(Math.floor(((rightNow - startDate) / 1000) / 60), 2);
+								hours = pad(Math.floor(((rightNow - startDate) / 1000) / 360), 2);
+								var timeContainer = $("#bridgedTimer_" + uuid);
+								timeContainer.html(hours + ":" + minutes + ":" + seconds);
 
+							}
+						}
+					});
+				});
+			}, 1000);
+		});
+
+		function handleMemberUpdate() {
+			var displayedArray = [];
+			var pushedArray = [];
+			var diff = [];
+
+			$("#callContainer").children().each(function () {
+				displayedArray.push($(this).attr('id').replace("callBox_", ""));
+			});
+
+			for (var m = 0; m < Members.length; m++) {
+				pushedArray.push(Members[m].uuid);
+			}
+
+			diff = diffArray(displayedArray, pushedArray);
+			for (var d = 0; d < diff.length; d++) {
+				var callBox = $("#callBox_" + diff[d]);
+				callBox.hide("drop", { direction: "right" }, "slow",
+					function () { callBox.remove() }
+				);
+			}
+
+			//Member Join/eave Update	
+			for (var m = 0; m < Members.length; m++) {
+				if (Members[m].state == "Bridged") {
+					var callBox = $("#callBox_" + Members[m].uuid);
+					var agentState = $("#agentState_" + Members[m].agent);
+					callBox.hide("drop", { direction: "left" }, "slow");
+					var htmlOut = "";
+					htmlOut += "<div class='bridgedStatus' id='bridgedStatus_" + Members[m].uuid + "'>";
+					htmlOut += "<div class='bridgedID'><div class='bridgedName'>" + Members[m].name + "</div><div class='bridgedNumber'>" + Members[m].number + "</div></div>";
+					htmlOut += "<div class='bridgedTimer' id='bridgedTimer_" + Members[m].uuid + "'>00:00:00</div>";
+					htmlOut += "</div>";
+					agentState.html(htmlOut);
+				}
+				if (Members[m].state == "Inactive") {
+					var callBox = $("#callBox_" + Members[m].uuid);
+					var agentState = $("#agentState_" + Members[m].agent);
+					callBox.remove();
+				}
+				if (Members[m].state == "Active") {
+					if (!$("#callBox_" + Members[m].uuid).length) {//only add new calls
+						var htmlOut = "";
+						var selectedQueue = $("#queueSelect option:selected").text();
+						if (Members[m].queue == selectedQueue) { //will need something about joined here
+							htmlOut += "<div class='callBox' style='display:none' id='callBox_" + Members[m].uuid + "'>";
+							htmlOut += "<div class='callIcon'></div>";
+							htmlOut += "<div class='callInfo' id='callerID_" + Members[m].uuid + "'><div class='callInfoHeader'>Caller</div>";
+							htmlOut += "<div class='callerName'>" + Members[m].name + "</div><div class='callerNumber'>" + Members[m].number + "</div></div>";
+							htmlOut += "<div class='callStatus' ><div class='callInfoHeader'>Time In Queue</div><div class='callTimer' id='callTimer_" + Members[m].uuid + "'>00:00:00</div></div>";
+							htmlOut += "</div>";
+						}
+						$("#callContainer").append(htmlOut);
+						var callBox = $("#callBox_" + Members[m].uuid);
+						callBox.show("drop", { direction: "up" }, "slow");
+					}
+				}
+			}
+
+		}
+
+		function flash(element) {
+			//old_background= element.css("background-color");
+			element.css('backgroundColor', 'hsl(0,100%,50%');
+
+			var d = 100;
+			for (var i = 50; i <= 100; i = i + 0.1) {
+				d += 10;
+				(function (ii, dd) {
+					setTimeout(function () {
+						element.css('backgroundColor', 'hsl(0,100%,' + ii + '%)');
+					}, dd);
+				})(i, d);
+			}
+			//element.css("background-color",old_background);
+
+		}
+
+
+
+		function queueStatsUpdate() {
+
+			//alert(JSON.stringify(Queues));
+			var queue = Queues;
+			var totalAgents = 0;
+			var loggedInAgents = 0;
+			var availableAgents = 0;
+			var onBreakAgents = 0;
+			var onCallAgents = 0;
+			var totalCalls = 0;
+			var activeCalls = 0;
+			var answeredCalls = 0;
+			var abandonedCalls = 0;
+			var abandonedTime = 0;
+			var abandonedTimeSeconds = 0;
+			var longestWait = 0;
+			for (var q = 0; q < queue.length; q++) {
+				totalAgents = queue[q].totalAgents;
+				loggedInAgents = queue[q].loggedInAgents;
+				availableAgents = queue[q].availableAgents;
+				onBreakAgents = queue[q].onBreakAgents;
+				onCallAgents = queue[q].agentsInCall;
+				totalCalls = queue[q].totalCalls;
+				activeCalls = queue[q].activeCalls;
+				answeredCalls = queue[q].answeredCalls;
+				abandonedCalls = queue[q].abandonedCalls;
+				abandonedTime = queue[q].abandonedTime;
+				abandonedTimeSeconds = pad(abandonedTime % 60, 2);
+				abandonedTimeMinutes = pad(Math.floor(abandonedTime / 60), 2);
+				abandonedTimeHours = pad(Math.floor(abandonedTime / 3600), 2);
+				longestWait = queue[q].longestWait;
+				longestWaitSeconds = pad(longestWait % 60, 2);
+				longestWaitMinutes = pad(Math.floor(longestWait / 60), 2);
+				longestWaitHours = pad(Math.floor(longestWait / 3600), 2);
+				selectedQueue = $("#queueSelect option:selected").text();
+				if (queue[q].name == selectedQueue) { //will need something about joined here
+					$("#agentsTotal").html(totalAgents);
+					$("#agentsLoggedIn").html(loggedInAgents);
+					$("#agentsAvailable").html(availableAgents);
+					$("#agentsOnBreak").html(onBreakAgents);
+					$("#agentsInCall").html(onCallAgents);
+					//flash($("#callsTotal"));
+					$("#callsTotal").html(totalCalls);
+					$("#callsConnected").html(activeCalls);
+					$("#callsAnswered").html(answeredCalls);
+					$("#callsAbandonded").html(abandonedCalls);
+					$("#callsWait").html(longestWaitHours + ":" + longestWaitMinutes + ":" + longestWaitSeconds);
+					$("#abandonTime").html(abandonedTimeHours + ":" + abandonedTimeMinutes + ":" + abandonedTimeSeconds);
+				}
+			}
+		}
+
+
+		function handleAgentState() {
+			var agents = Agents;
+			var agentsLoggedInCount = 0;
+			var selectedQueue = $("#queueSelect option:selected").text();
+			for (var a = 0; a < agents.length; a++) {
+				var state = agents[a].state + "";
+				var status = agents[a].status + "";
+				var agentStateID = $("#agentState_" + agents[a].name);
+				var agentStatusID = $("#agentStatus_" + agents[a].name);
+				if (status == "Available") {
+					agentsLoggedInCount++;
+					if (state == "In a queue call") {
+					}
+					if (state == "Waiting") {
+						agentStateID.html(state);
+					}
+					if (state == "Receiving") {
+						agentStateID.html(state);
+					}
+				} else if (status == "On Break") {
+					agentStateID.html("---");
+				}
+			}
+			$("#agentsLoggedIn").html(agentsLoggedInCount);
+		}
+
+		function handleAgentStatus() {
+			var agents = Agents;
+			for (var a = 0; a < agents.length; a++) {
+				var status = agents[a].status + "";
+				var agentStatusID = $("#agentStatus_" + agents[a].name);
+				var agentBoxID = $("#agentBox_" + agents[a].name);
+				if (status == "On Break") {
+					if (agentBoxID.is(":hidden")) {
+						agentBoxID.show("drop", { direction: "left" }, "slow");
+					}
+					agentStatusID.css("background-color", "orange");
+					//agentStatusID.effect( "highlight", {color:"#669966"}, 1000 );
+				}
+				if (status == "Available") {
+					if (agentBoxID.is(":hidden")) {
+						agentBoxID.show("drop", { direction: "left" }, "slow");
+					}
+					agentStatusID.css("background-color", "green");
+					//agentStatusID.effect( "highlight", {color:"#669966"}, 1000 );
+				}
+				if (status == "Logged Out") {
+					agentBoxID.hide("drop", { direction: "right" }, "slow");
+				}
+			}
+
+		}
+
+
+		function displayMembers() {
+			$("#callContainer").html("");
+			var members = Members;
+			var htmlOut = "";
+			var selectedQueue = $("#queueSelect option:selected").text();
+			for (var m = 0; m < members.length; m++) {
+				if (members[m].queue == selectedQueue) { //will need something about joined here
+					htmlOut += "<div class='callBox' id='callBox_" + members[m].uuid + "'>";
+					htmlOut += "<div class='callIcon'></div>";
+					htmlOut += "<div class='callInfo' id='callerID_" + members[m].uuid + "'><div class='callInfoHeader'>Caller</div>";
+					htmlOut += "<div class='callerName'>" + members[m].name + "</div><div class='callerNumber'>" + members[m].number + "</div></div>";
+					htmlOut += "<div class='callStatus' ><div class='callInfoHeader'>Time In Queue</div><div class='callTimer' id='callTimer_" + members[m].uuid + "'>00:00:00</div></div>";
+					htmlOut += "</div>";
+				}
+			}
+			$("#callContainer").append(htmlOut);
+		}
+
+
+
+		function agentUpdate() {
+			var htmlOut = "";
+			var selectedQueue = $("#queueSelect option:selected").text();
+			for (var a = 0; a < Agents.length; a++) {
+				if (Agents[a].queue == selectedQueue) {
+					if (!$("#agentBox_" + Agents[a].name).length) {
+						htmlOut += "<div class='agentBox' id='agentBox_" + Agents[a].name + "'>";
+						htmlOut += "<div class='agentAvatar'>"
+							+ "<div class='agentStatus' id='agentStatus_" + Agents[a].name + "'></div><div class='agentInfoHeader'>" + removeAgentString(Agents[a].name) + "</div></div>"
+							+ "<div class='agentInfo'><div class='agentInfoHeader'>Calls</div>" + Agents[a].calls_answered + "</div>"
+							+ "<div class='agentInfo'><div class='agentInfoHeader'>Missed</div>" + Agents[a].no_answer_count + "</div>"
+							+ "<div class='agentInfo'><div class='agentInfoHeader'>CPT</div>" + Agents[a].talk_time + "</div>";
+						htmlOut += "<div class='agentStatusInfo'>"
+							+ "<div class='agentInfoHeader'>Call State</div>"
+							+ "<div id='agentState_" + Agents[a].name + "'>" + Agents[a].state + "</div></div>";
+						htmlOut += "</div>";
+					}
+				}
+			}
+			$("#agentContainer").append(htmlOut);
+			for (var a = 0; a < Agents.length; a++) {
+				var status = Agents[a].status + "";
+				var agentStatusID = $("#agentStatus_" + Agents[a].name);
+				var agentBoxID = $("#agentBox_" + Agents[a].name);
+				if (status == "On Break") {
+					if (agentBoxID.is(":hidden")) {
+						agentBoxID.show("drop", { direction: "left" }, "slow");
+					}
+					agentStatusID.css("background-color", "orange");
+					//agentStatusID.effect( "highlight", {color:"#669966"}, 1000 );
+				}
+				if (status == "Available") {
+					if (agentBoxID.is(":hidden")) {
+						agentBoxID.show("drop", { direction: "left" }, "slow");
+					}
+					agentStatusID.css("background-color", "green");
+					//agentStatusID.effect( "highlight", {color:"#669966"}, 1000 );
+				}
+				if (status == "Logged Out") {
+					agentBoxID.hide("drop", { direction: "right" }, "slow");
+				}
+				var state = Agents[a].state + "";
+				var status = Agents[a].status + "";
+				var agentStateID = $("#agentState_" + Agents[a].name);
+				var agentStatusID = $("#agentStatus_" + Agents[a].name);
+				if (status == "Available") {
+					if (state == "In a queue call") {
+						agentStatusID.css("background-color", "red");
+					}
+					if (state == "Waiting") {
+						agentStateID.html(state);
+						agentStatusID.css("background-color", "green");
+					}
+					if (state == "Receiving") {
+						agentStateID.html(state);
+						agentStatusID.css("background-color", "yellow");
+					}
+				} else if (status == "On Break") {
+					agentStateID.html("---");
+				}
+			}
+		};
+	</script>
+</head>
+
+<body>
+	<div class="ui-layout-center">
+		<div class='columnHeader'>Agents</div>
+		<div id="agentContainer"></div>
+	</div>
+	<div class="ui-layout-north" id="top">
+		<select name="queueSelect" id="queueSelect">
+			<option>Select A Queue</option>
+		</select>
+		<div id='logo'>
+			Queue View
+		</div>
+	</div>
+	<div class="ui-layout-south">South</div>
+	<div class="ui-layout-east">
+		<div class='columnHeader'>
+			Calls
+		</div>
+		<div id="callContainer"></div>
+	</div>
+	</div>
+	<div class="ui-layout-west">
+		<div class='columnHeader'>
+			Queue Stats
+		</div>
+		<div id="statsContainer" class="statsContainer"></div>
+		<div class='statsBox'>
+			<div class='statsHeader'>
+				Agents
+			</div>
+			<div class='statsInfo'>
+				<div class='statsSubHeader'>
+					Total
+				</div>
+				<div id='agentsTotal' class='statsData'>
+					--
+				</div>
+			</div>
+			<div class='statsInfo'>
+				<div class='statsSubHeader'>
+					Logged in
+				</div>
+				<div id='agentsLoggedIn' class='statsData'>
+					--
+				</div>
+			</div>
+			<div class='statsInfo'>
+				<div class='statsSubHeader'>
+					Available
+				</div>
+				<div id='agentsAvailable' class='statsData'>
+					--
+				</div>
+			</div>
+			<div class='statsInfo'>
+				<div class='statsSubHeader'>
+					In Call
+				</div>
+				<div id='agentsInCall' class='statsData'>
+					--
+				</div>
+			</div>
+			<div class='statsInfo'>
+				<div class='statsSubHeader'>
+					On Break
+				</div>
+				<div id='agentsOnBreak' class='statsData'>
+					--
+				</div>
+			</div>
+		</div>
+		<div class='statsBox'>
+			<div class='statsHeader'>
+				Queue
+			</div>
+			<div class='statsInfo'>
+				<div class='statsSubHeader'>
+					Total Calls
+				</div>
+				<div id='callsTotal' class='statsData'>
+					--
+				</div>
+			</div>
+			<div class='statsInfo'>
+				<div class='statsSubHeader'>
+					Calls Connected
+				</div>
+				<div id='callsConnected' class='statsData'>
+					--
+				</div>
+			</div>
+			<div class='statsInfo'>
+				<div class='statsSubHeader'>
+					Answered Calls
+				</div>
+				<div id='callsAnswered' class='statsData'>
+					--
+				</div>
+			</div>
+			<div class='statsInfo'>
+				<div class='statsSubHeader'>
+					Calls Abandonded
+				</div>
+				<div id='callsAbandonded' class='statsData'>
+					--
+				</div>
+			</div>
+			<div class='statsInfo'>
+				<div class='statsSubHeader'>
+					Longest Wait
+				</div>
+				<div id='callsWait' class='statsData'>
+					--
+				</div>
+			</div>
+			<div class='statsInfo'>
+				<div class='statsSubHeader'>
+					Abandon Time
+				</div>
+				<div id='abandonTime' class='statsData'>
+					--
+				</div>
+			</div>
+		</div>
+	</div>
+</body>
+
+<script>
+	var socket = io();
+	socket.on('queueFill', function (qf) {
+		for (var q = 0; q < qf.length; q++) {
+			$("#queueSelect").append("<option>" + qf[q].name + "</option>");
+		}
+	});
+	socket.on('agentFill', function (af) {
+		Agents = af;
+		agentUpdate();
+	});
+	socket.on('agentStatusUpdate', function (asu) {
+		Agents = asu;
+		agentUpdate();
+		//handleAgentState();
+	});
+	socket.on('agentStateUpdate', function (asu) {
+		Agents = asu;
+		agentUpdate();
+		//$("#statsContainer").html(JSON.stringify(asu));
+	});
+	socket.on('agentOffering', function (ao) {
+		Agents = ao;
+		//$("#statsContainer").html(JSON.stringify(ao));
+	});
+	socket.on('memberStart', function (mu) {
+		Members = mu;
+		handleMemberUpdate();
+	});
+	socket.on('queueStats', function (qu) {
+		Queues = qu;
+		queueStatsUpdate();
+	});
+	socket.on('memberUpdate', function (mu, callback) {
+		Members = mu;
+		handleMemberUpdate();
+	});
+</script>
+
+</html>
